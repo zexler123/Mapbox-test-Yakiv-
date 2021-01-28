@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Search Field</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet" />
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v2.0.1/mapbox-gl.js"></script>
+    <script src='./assets/functions.js'></script>
+    <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v2.0.1/mapbox-gl.css" rel="stylesheet" />
+    
+    <script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.2.0/mapbox-gl-geocoder.min.js'></script>
+    <link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.2.0/mapbox-gl-geocoder.css' type='text/css' />
+
+    <!-- Turf.js plugin -->
+    <script src='https://npmcdn.com/@turf/turf/turf.min.js'></script>
+
+    <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+    
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <link href="./assets/style.css" rel="stylesheet" /> 
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.0/mapbox-gl-directions.js"></script>
+  </head>
+  <body>
+    <div class="sidebar">
+      <div class="heading">
+        <h1>Our locations</h1>
+      </div>
+      <div id="listings" class="listings"></div>
+    </div>
+    <div id="map" class="map"></div>
+    <div id="foursquareMode">
+      <div class="fq-header-container">
+        <div class="fq-title" id="place_name"></div>
+        <div class="fq-close-btn" onclick="modalClose()"><i class="glyphicon glyphicon-remove"></i></div>
+      </div>
+      <div class="fq-body-container">
+        <div class="fq-body-rating">
+          
+          <div class="fq-rating">
+            <i class="glyphicon glyphicon-star"></i>      
+            
+          </div>
+          <div class="fq-rating" id="place_rating">0.0</div>
+          <div class="fq-rating" id="place_reviews">0 Likes</div>
+        </div>
+        <div class="fq-body-address" id="place_description"> 
+        </div>
+        
+        <div class="fq-body-subinfo">
+          <div class="fq-subinfo-row"> 
+            <div class="subinfo-title">Located in:&nbsp;&nbsp; </div>
+            <div id="locate"></div>
+          </div>
+          <div class="fq-subinfo-row"> 
+            <div class="subinfo-title">Address:&nbsp;&nbsp; </div>
+            <div id="address"></div>
+          </div>
+          <div class="fq-subinfo-row"> 
+            <div class="subinfo-title">Twitter: &nbsp;&nbsp;</div>
+            <div id="twitter"></div>
+          </div>
+          <div class="fq-subinfo-row"> 
+            <div class="subinfo-title">Phone:&nbsp;&nbsp; </div>
+            <div id = "phone"></div>
+          </div>
+        </div>
+        <div class="fq-body-contact">
+          <a class="contact" id = "website" href="#">Website</a>
+          <!-- <a class="contact" onclick = "showRouter()" href="#">Directions</a> -->
+        </div>
+      </div>
+      
+    </div>
+    <script>
+      /* This will let you use the .remove() function later on */
+      
+      if (!('remove' in Element.prototype)) {
+        Element.prototype.remove = function () {
+          if (this.parentNode) {
+            this.parentNode.removeChild(this);
+          }
+        };
+      }
+
+      mapboxgl.accessToken = 'pk.eyJ1IjoiYmFuemFhciIsImEiOiJ4akIxdlZBIn0.D431j0UB6ko4pLzO7P8edw';
+
+      /**
+       * Add the map to the page
+       */
+      var map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center: [-77.034084142948, 38.909671288923],
+        zoom: 13,
+        scrollZoom: true
+      });
+
+      // search bar
+      
+      addGeoCoder()
+      currentLocation = {
+        latitude: -77.034084142948,
+        logitude: 38.909671288923
+      }
+      prevLocation = {
+        latitude: -77.034084142948,
+        logitude: 38.909671288923
+      }
+      map.addControl(geocoder, 'top-left');
+      navigator.geolocation.getCurrentPosition(position => { 
+        map.setCenter([position.coords.longitude, position.coords.latitude])
+        console.log(position)
+        var marker = new mapboxgl.Marker()
+        .setLngLat([position.coords.longitude, position.coords.latitude])
+        .addTo(map);
+        userLocation = {
+          latitude: position.coords.longitude,
+          longitude: position.coords.latitude
+        }
+        currentLocation = {
+          latitude: position.coords.longitude,
+          longitude: position.coords.latitude
+        }
+        prevLocation = {
+          latitude: position.coords.longitude,
+          longitude: position.coords.latitude
+        }
+      }); 
+      
+      map.on('sourcedata', function(e) {
+        if (e.isSourceLoaded) {
+        // Do something when the source has finished loading
+          
+        }
+      });
+      
+      stores = {
+        'type': 'FeatureCollection',
+        'features': [
+          
+        ]
+      };
+
+
+      // var options = { units: 'miles' };
+      // stores.features.forEach(function(store) {
+      //   Object.defineProperty(store.properties, 'distance', {
+      //     value: turf.distance(searchResult, store.geometry, options),
+      //     writable: true,
+      //     enumerable: true,
+      //     configurable: true
+      //   });
+      // });
+
+
+      /**
+       * Assign a unique id to each store. You'll use this `id`
+       * later to associate each point on the map with a listing
+       * in the sidebar.
+       */
+       geocoder.on('result', function(ev) {
+        var searchResult = ev.result.geometry;
+        // Code for the next step will go here
+        console.log(searchResult)
+      });
+
+      stores.features.forEach(function (store, i) {
+        store.properties.id = i;
+      });
+
+      /**
+       * Wait until the map loads to make changes to the map.
+       */
+      //  map.on("zoom", function(){
+      //   currentZoom = map.getZoom()
+      //   searchNearBy()
+      // })
+      map.on("moveend", function(){
+        // console.log("moveend")
+        searchNearBy()
+        stopFlag = false
+      })
+
+      map.on('click', function(e) {
+      var coordsObj = e.lngLat;
+      console.log(coordsObj)
+      })
+      map.on('load', function (e) {
+      /**
+       * This is where your '.addLayer()' used to be, instead
+       * add only the source without styling a layer
+       */
+        canvas = map.getCanvasContainer();
+        map.addSource('places', {
+          'type': 'geojson',
+          'data': stores
+        });
+        searchNearBy()
+      });
+     
+      /**
+       * Use Mapbox GL JS's `flyTo` to move the camera smoothly
+       * a given center point.
+       **/
+      
+    </script>
+    
+  </body>
+</html>
